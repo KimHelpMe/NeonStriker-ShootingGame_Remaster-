@@ -26,6 +26,7 @@ static const char* SFX_FILES[S_COUNT] = {
     "player_hit.wav", "player_die.wav",
     "item.wav", "powerup.wav", "levelup.wav", "fever.wav",
     "warning.wav", "select.wav", "pause.wav", "tick.wav", "stage_start.wav", "game_over.wav", "clear.wav",
+    "giga_laser.wav", "flame_orb.wav", "missile_launch.wav",
 };
 
 void Assets::Load()

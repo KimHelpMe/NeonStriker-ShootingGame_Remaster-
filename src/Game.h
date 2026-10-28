@@ -54,6 +54,8 @@ private:
     void UpdatePlaying(float dt);
     void ResolveCollisions();
     void UpdateLaserBlocking();
+    void UpdateChargeImpacts(float dt);  // 차지샷 3종 피격 이펙트
+    float impactTimer = 0;
 
     float stageEndDelay = 0;  // 보스 격파 후 다음 스테이지까지 잠깐 대기
     int   lastCountdownNum = 9;

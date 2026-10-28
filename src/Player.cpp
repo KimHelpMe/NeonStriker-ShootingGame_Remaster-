@@ -129,7 +129,15 @@ void Player::Update(Game& g, float dt)
         missileTimer += dt;
         if (missileTimer >= SHOT_DELAY) {
             g.bullets.Spawn(BulletType::P_MISSILE, { pos.x + 30, pos.y }, { 620, 0 }, 18, C_NORMAL, 4.0f);
-            Assets::Play(S_SHOT_NORMAL, 0.9f, 0.05f);
+            Assets::Play(S_MISSILE_LAUNCH, 0.9f, 0.08f);
+            // 발사 섬광 + 위아래로 퍼지는 충격파
+            g.fx.Spawn({ pos.x + 30, pos.y }, { 0, 0 }, 0.15f, 70, 20, WHITE, { 60, 180, 255, 0 });
+            for (int k = 0; k < 14; k++) {
+                float a = RandF(-1.2f, 1.2f), sp = RandF(300, 600);
+                g.fx.Spawn({ pos.x + 30, pos.y }, { cosf(a) * sp, sinf(a) * sp }, 0.3f, 7, 1,
+                           { 200, 245, 255, 255 }, { 40, 120, 255, 0 }, 3.0f);
+            }
+            g.fx.Shake(4, 0.08f);
             missileQueue--;
             missileTimer = 0;
         }
@@ -137,15 +145,37 @@ void Player::Update(Game& g, float dt)
     if (gigaLaserTimer > 0) {
         gigaLaserTimer -= dt;
         g.fx.Shake(3, 0.05f);
+        // 1초짜리 전기음이 끝나면 다시 재생 -> 레이저가 켜져 있는 동안 계속 "파지지직"
+        if (gigaLaserTimer > 0 && !Assets::IsPlaying(S_GIGA_LASER)) Assets::Play(S_GIGA_LASER, 0.8f);
+        if (gigaLaserTimer <= 0) Assets::Stop(S_GIGA_LASER);
     }
     if (flameOrbTimer > 0) {
         flameOrbTimer -= dt;
         orbAngle += dt * 3.0f;
-        Vector2 c[4];
-        FlameOrbCenters(c);
-        for (auto& p : c)
-            g.fx.Spawn(Vector2Add(p, { RandF(-20, 20), RandF(-20, 20) }), { RandF(-30, 30), RandF(-60, -20) },
-                       0.35f, 16, 2, { 255, 200, 80, 200 }, { 255, 30, 0, 0 });
+        // 1초짜리 "화르륵" 불길 소리를 화염구가 있는 동안 반복
+        if (flameOrbTimer > 0 && !Assets::IsPlaying(S_FLAME_ORB)) Assets::Play(S_FLAME_ORB, 0.8f);
+        if (flameOrbTimer <= 0) Assets::Stop(S_FLAME_ORB);
+
+        orbFxTimer += dt;
+        while (orbFxTimer >= 1.0f / 60.0f) {          // 프레임레이트와 상관없이 1초에 60번 방출
+            orbFxTimer -= 1.0f / 60.0f;
+            Vector2 c[4];
+            FlameOrbCenters(c);
+            for (int i = 0; i < 4; i++) {
+                Vector2 p = c[i];
+                for (int k = 0; k < 3; k++)               // 화염구 본체에서 솟는 불길
+                    g.fx.Spawn(Vector2Add(p, { RandF(-40, 40), RandF(-40, 40) }), { RandF(-40, 40), RandF(-120, -40) },
+                               RandF(0.3f, 0.5f), RandF(18, 28), 2, { 255, 210, 90, 220 }, { 255, 30, 0, 0 }, 1.0f);
+                // 회전 반대 방향으로 남는 꼬리
+                float a = orbAngle + i * (PI / 2);
+                Vector2 tail = { -sinf(a) * 150 * 3.0f * -0.3f, cosf(a) * 110 * 3.0f * -0.3f };
+                g.fx.Spawn(p, tail, 0.4f, 22, 4, { 255, 160, 40, 200 }, { 200, 20, 0, 0 }, 1.5f);
+            }
+            // 궤도를 따라 이어지는 불의 고리
+            float ra = RandF(0, 2 * PI);
+            g.fx.Spawn({ pos.x + cosf(ra) * 210 * OrbSpread(), pos.y + sinf(ra) * 150 * OrbSpread() }, { 0, -30 },
+                       0.35f, 12, 2, { 255, 140, 40, 180 }, { 255, 20, 0, 0 }, 1.0f);
+        }
     }
 }
 
@@ -233,7 +263,16 @@ void Player::ReleaseCharge(Game& g)
 {
     switch (weapon) {
     case WeaponType::NORMAL: missileQueue = 10; missileTimer = SHOT_DELAY; break; // 첫 발은 즉시
-    case WeaponType::FLAME:  flameOrbTimer = 4.0f; break;
+    case WeaponType::FLAME:
+        flameOrbTimer = FLAME_ORB_TIME; orbFxTimer = 0;
+        // 방출 순간: 사방으로 터지는 불의 충격파
+        for (int k = 0; k < 80; k++) {
+            float a = k * (2 * PI / 80), sp = RandF(400, 800);
+            g.fx.Spawn(pos, { cosf(a) * sp, sinf(a) * sp * 0.75f }, RandF(0.4f, 0.7f), RandF(14, 24), 2,
+                       { 255, 230, 140, 255 }, { 255, 30, 0, 0 }, 2.5f);
+        }
+        g.fx.Explosion(pos, 2.0f, { 255, 120, 30, 255 });
+        break;
     case WeaponType::LASER:  gigaLaserTimer = 5.0f; break;
     }
     Assets::Play(S_CHARGE_SHOT);
@@ -256,11 +295,19 @@ Rectangle Player::GigaLaserRect() const
     return { x0, pos.y - 180, gigaLaserEndX - x0, 360 };   // 원본: 위아래 17칸 (35줄)
 }
 
+// 방출 직후 0.4초 동안 기체에서 바깥으로 소용돌이치며 퍼져 나감 (0 -> 1)
+float Player::OrbSpread() const
+{
+    float t = (FLAME_ORB_TIME - flameOrbTimer) / 0.4f;
+    return t >= 1.0f ? 1.0f : (t <= 0 ? 0 : t);
+}
+
 void Player::FlameOrbCenters(Vector2 out[4]) const
 {
-    for (int i = 0; i < 4; i++) {                    // 90도 간격 4개, 가로로 조금 긴 궤도
+    float s = OrbSpread();
+    for (int i = 0; i < 4; i++) {                    // 90도 간격 4개, 가로로 조금 긴 궤도 (강화 전 150x110)
         float a = orbAngle + i * (PI / 2);
-        out[i] = { pos.x + cosf(a) * 150, pos.y + sinf(a) * 110 };
+        out[i] = { pos.x + cosf(a) * 210 * s, pos.y + sinf(a) * 150 * s };
     }
 }
 
@@ -292,6 +339,8 @@ void Player::Die(Game& g)
     bombs = 3;
     charging = false; chargeTimer = 0; missileQueue = 0; gigaLaserTimer = 0; flameOrbTimer = 0;
     Assets::Stop(S_CHARGE);
+    Assets::Stop(S_GIGA_LASER);
+    Assets::Stop(S_FLAME_ORB);
 
     g.fx.Explosion(pos, 2.5f, C_NORMAL);
     g.fx.Explosion(pos, 1.5f, { 255, 120, 230, 255 });
@@ -376,7 +425,10 @@ void Player::Draw(const Game&) const
     if (FlameOrbsOn()) {
         Vector2 c[4];
         FlameOrbCenters(c);
+        float flick = 1.0f + sinf(time * 30) * 0.08f;   // 불꽃이 일렁이는 크기 변화
+        DrawGlow(pos, 260, { 255, 80, 10, 60 });          // 궤도 전체를 덮는 열기
         for (auto& p : c) {
+            DrawGlow(p, FLAME_ORB_RADIUS * 2.3f * flick, { 255, 40, 0, 120 });
             DrawGlow(p, FLAME_ORB_RADIUS * 1.7f, { 255, 60, 20, 200 });
             DrawGlow(p, FLAME_ORB_RADIUS * 1.1f, { 255, 200, 60, 255 });
             DrawGlow(p, FLAME_ORB_RADIUS * 0.5f, WHITE);

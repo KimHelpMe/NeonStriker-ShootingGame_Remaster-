@@ -77,7 +77,7 @@ void Game::Update(float dt)
 
     case Scene::PAUSED:
         if (IsKeyPressed(KEY_ESCAPE)) { Assets::Play(S_PAUSE); ChangeScene(Scene::PLAYING); }
-        else if (IsKeyPressed(KEY_R)) { Assets::Play(S_SELECT); Assets::Stop(S_CHARGE); ChangeScene(Scene::LOGO); }
+        else if (IsKeyPressed(KEY_R)) { Assets::Play(S_SELECT); Assets::Stop(S_CHARGE); Assets::Stop(S_GIGA_LASER); Assets::Stop(S_FLAME_ORB); ChangeScene(Scene::LOGO); }
         else if (IsKeyPressed(KEY_E)) quit = true;
         break;
 
@@ -176,6 +176,7 @@ void Game::UpdatePlaying(float dt)
     items.Update(*this, dt);
     boss.Update(*this, dt);
     ResolveCollisions();
+    UpdateChargeImpacts(dt);
     fx.Update(dt);
 
     // 게임 오버: 목숨을 다 쓰고 폭발 연출까지 끝났을 때
@@ -199,6 +200,102 @@ void Game::UpdatePlaying(float dt)
                 ChangeScene(Scene::CLEAR);
             }
         }
+    }
+}
+
+// 차지샷(기가 레이저 / 화염구 / 기가 미사일)에 맞고 있는 적의 피격 위치에 강렬한 이펙트를 계속 뿌림
+// 프레임마다 뿌리면 144fps에서 60fps보다 2.4배 많아지므로, 1/60초 간격으로 고정
+void Game::UpdateChargeImpacts(float dt)
+{
+    bool anyMissile = false;
+    Bullet* bp = bullets.Data();
+    for (int i = 0; i < BULLET_COUNT && !anyMissile; i++)
+        anyMissile = bp[i].active && bp[i].type == BulletType::P_MISSILE;
+    if (!player.Alive() || !(player.GigaLaserOn() || player.FlameOrbsOn() || anyMissile)) { impactTimer = 0; return; }
+
+    impactTimer += dt;
+    const float INTERVAL = 1.0f / 60.0f;
+    if (impactTimer < INTERVAL) return;
+    impactTimer -= INTERVAL;
+    if (impactTimer > INTERVAL) impactTimer = 0;   // 프레임이 크게 밀렸을 때 몰아서 뿜지 않도록
+
+    // dir: 불꽃이 튀는 기준 각도 / hot: 중심색 / cool: 사라질 때 색
+    auto Impact = [&](Vector2 p, float power, float dir, Color hot, Color cool) {
+        fx.Spawn(p, { 0, 0 }, 0.08f, 34 * power, 14 * power, WHITE, ColorAlpha(hot, 0));             // 중심 섬광
+        for (int i = 0; i < 6; i++) {                                                               // 불꽃
+            float a = dir + RandF(-1.3f, 1.3f), sp = RandF(250, 750) * power;
+            fx.Spawn(p, { cosf(a) * sp, sinf(a) * sp }, RandF(0.15f, 0.35f), 5, 1, hot, ColorAlpha(cool, 0), 4.0f);
+        }
+        fx.Spawn(Vector2Add(p, { RandF(-8, 8), RandF(-8, 8) }), { RandF(-60, 60), RandF(-60, 60) }, 0.25f,
+                 18 * power, 4, ColorAlpha(cool, 0.8f), BLANK, 2.0f);                                 // 잔광
+        if (GetRandomValue(0, 9) == 0) fx.Explosion(p, 0.5f * power, hot);                          // 가끔 작은 폭발
+    };
+    Monster* mp = monsters.Data();
+    bool bossOn = boss.Fighting();
+    Rectangle hb = bossOn ? boss.Hitbox() : Rectangle{ 0, 0, 0, 0 };
+
+    // 1) 기가 레이저: 노랑·청록 전기 불꽃이 레이저 반대쪽(왼쪽)으로 튐
+    if (player.GigaLaserOn()) {
+        const Color hot = { 255, 255, 200, 255 }, cool = { 80, 255, 255, 255 };
+        Rectangle r = player.GigaLaserRect();
+        for (int k = 0; k < MONSTER_COUNT; k++) {
+            if (!mp[k].active || mp[k].pos.x > SCREEN_W) continue;
+            if (!CheckCollisionCircleRec(mp[k].pos, mp[k].Radius(), r)) continue;
+            Impact({ mp[k].pos.x - mp[k].Radius() * 0.6f, mp[k].pos.y + RandF(-6, 6) }, 1.0f, PI, hot, cool);
+        }
+        if (bossOn) {
+            float top = fmaxf(r.y, hb.y), bottom = fminf(r.y + r.height, hb.y + hb.height);
+            if (top < bottom && r.x < player.gigaLaserEndX) {
+                for (int i = 0; i < 2; i++)   // 보스는 면적이 크니 두 군데
+                    Impact({ player.gigaLaserEndX + RandF(-10, 10), RandF(top, bottom) }, 1.5f, PI, hot, cool);
+                fx.Shake(5, 0.05f);
+            }
+        }
+    }
+
+    // 2) 화염구: 닿은 지점에서 사방으로 불꽃
+    if (player.FlameOrbsOn()) {
+        const Color hot = { 255, 220, 120, 255 }, cool = { 255, 40, 0, 255 };
+        Vector2 c[4];
+        player.FlameOrbCenters(c);
+        for (auto& o : c) {
+            for (int k = 0; k < MONSTER_COUNT; k++) {
+                if (!mp[k].active || mp[k].pos.x > SCREEN_W) continue;
+                if (!CircleHit(o, Player::FLAME_ORB_RADIUS, mp[k].pos, mp[k].Radius())) continue;
+                Vector2 dir = Vector2Normalize(Vector2Subtract(mp[k].pos, o));
+                Vector2 contact = Vector2Subtract(mp[k].pos, Vector2Scale(dir, mp[k].Radius()));
+                Impact(contact, 1.1f, atan2f(dir.y, dir.x), hot, cool);
+            }
+            if (bossOn && CheckCollisionCircleRec(o, Player::FLAME_ORB_RADIUS, hb)) {
+                Vector2 contact = { Clamp(o.x, hb.x, hb.x + hb.width), Clamp(o.y, hb.y, hb.y + hb.height) };
+                Impact(contact, 1.6f, atan2f(contact.y - o.y, contact.x - o.x), hot, cool);
+                fx.Shake(4, 0.05f);
+            }
+        }
+    }
+
+    // 3) 기가 미사일: 미사일 벽이 닿은 지점에서 폭발
+    if (anyMissile) {
+        const Color hot = { 220, 250, 255, 255 }, cool = { 40, 160, 255, 255 };
+        bool hitAny = false;
+        for (int i = 0; i < BULLET_COUNT; i++) {
+            Bullet& b = bp[i];
+            if (!b.active || b.type != BulletType::P_MISSILE) continue;
+            float h = b.MissileHalfHeight();
+            Rectangle r = { b.pos.x - 20, b.pos.y - h, 50, h * 2 };
+            for (int k = 0; k < MONSTER_COUNT; k++) {
+                if (!mp[k].active || mp[k].pos.x > SCREEN_W) continue;
+                if (!CheckCollisionCircleRec(mp[k].pos, mp[k].Radius(), r)) continue;
+                Impact({ mp[k].pos.x - mp[k].Radius() * 0.5f, mp[k].pos.y }, 1.0f, 0, hot, cool);   // 진행 방향(오른쪽)으로 튐
+                hitAny = true;
+            }
+            if (bossOn && CheckCollisionRecs(r, hb)) {
+                float top = fmaxf(r.y, hb.y), bottom = fminf(r.y + r.height, hb.y + hb.height);
+                Impact({ hb.x + RandF(0, 20), RandF(top, bottom) }, 1.4f, PI, hot, cool);
+                hitAny = true;
+            }
+        }
+        if (hitAny && GetRandomValue(0, 7) == 0) Assets::Play(S_EXPLODE_SMALL, 0.5f, 0.2f);
     }
 }
 

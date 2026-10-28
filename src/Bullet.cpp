@@ -5,9 +5,9 @@
 float Bullet::MissileHalfHeight() const
 {
     // 원본: spread = (전진거리 / 2.5) + 3, 최대 20줄
-    // 픽셀 환산: 최소 18px에서 시작해 최대 180px까지 넓어짐
-    float h = 18.0f + (pos.x - startX) * 0.35f;
-    return h > 180.0f ? 180.0f : h;
+    // 강화: 24px에서 시작해 더 빨리 넓어지고, 최대 260px (플레이 영역 세로 600px의 대부분)
+    float h = 24.0f + (pos.x - startX) * 0.5f;
+    return h > 260.0f ? 260.0f : h;
 }
 
 void BulletSystem::Reset()
@@ -94,11 +94,14 @@ void BulletSystem::Update(Game& g, float dt)
                 continue;
             }
             break;
-        case BulletType::P_MISSILE:
-            if (GetRandomValue(0, 1) == 0)
-                g.fx.Spawn({ b.pos.x - 20, b.pos.y + RandF(-b.MissileHalfHeight(), b.MissileHalfHeight()) },
-                           { -100, 0 }, 0.25f, 10, 0, { 120, 230, 255, 200 }, BLANK);
+        case BulletType::P_MISSILE: {
+            // 미사일 벽 전체에서 분사 화염 (윗줄~아랫줄 골고루)
+            float h = b.MissileHalfHeight();
+            for (int k = 0; k < 3; k++)
+                g.fx.Spawn({ b.pos.x - 24, b.pos.y + RandF(-h, h) }, { RandF(-260, -140), RandF(-20, 20) },
+                           RandF(0.2f, 0.35f), 12, 2, { 160, 240, 255, 230 }, { 40, 80, 255, 0 }, 2.0f);
             break;
+        }
         default: break;
         }
 
@@ -136,6 +139,7 @@ void BulletSystem::Draw() const
         case BulletType::P_MISSILE: {
             // 기가 미사일: 세로로 늘어선 미사일 벽
             float h = b.MissileHalfHeight();
+            DrawGlow(b.pos, h * 0.9f + 40, { 40, 120, 255, 70 });                  // 벽 전체를 감싸는 푸른 빛
             for (float y = -h; y <= h; y += 18) {
                 Vector2 p = { b.pos.x - fabsf(y) * 0.15f, b.pos.y + y };   // 가운데가 앞서는 화살촉 대형
                 DrawGlow(p, 22, { 60, 180, 255, 140 });

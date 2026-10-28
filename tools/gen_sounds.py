@@ -112,4 +112,41 @@ save("game_over.wav", go, 0.5)
 cl = np.concatenate([arp([523, 659, 784], .12, "square", .15), arp([1047], .2, "square", .2), arp([784, 1047], .12, "square", .15), arp([1319], .8, "square", .6)])
 save("clear.wav", cl, 0.45)
 
+# --- 기가 레이저 지속음 (파지지지직) ---
+# 1초짜리를 만들어 레이저가 켜져 있는 동안 반복 재생한다 (일시정지 시 소리가 따로 놀지 않도록)
+n = SR
+t = np.arange(n) / SR
+hum = sweep(110, 110, 1.0, "saw") * 0.35 + sweep(220, 220, 1.0, "square") * 0.15   # 전기 웅웅거림
+am = 0.6 + 0.4 * np.sign(np.sin(2 * np.pi * 23 * t))                                  # 초당 23번 떨림 = "지지지"
+crackle = np.zeros(n)                                                                  # 무작위 방전 = "파직"
+for i in rng.integers(0, n - 300, 450):
+    L = int(rng.integers(20, 250))
+    crackle[i:i + L] += rng.uniform(-1, 1, L) * np.exp(-np.arange(L) / 40)
+buzz = lowpass(noise(1.0), 2) * 0.4 * (0.5 + 0.5 * np.sin(2 * np.pi * 7 * t))         # 지글거리는 잡음
+gl = hum * am + crackle * 0.9 + buzz
+gl[:150] *= np.linspace(0, 1, 150)                                                     # 반복 이음새 클릭 방지
+save("giga_laser.wav", gl, 0.7)
+
+# --- 화염구 지속음 (화르르륵): 1초 루프 ---
+n = SR
+t = np.arange(n) / SR
+roar = lowpass(noise(1.0), 18) * (0.7 + 0.3 * np.sin(2 * np.pi * 3 * t))      # 낮게 웅웅거리는 불길
+hiss = lowpass(noise(1.0), 3) * 0.35 * (0.6 + 0.4 * np.sin(2 * np.pi * 9 * t))  # 쉬익
+pops = np.zeros(n)                                                               # 타닥타닥 튀는 소리
+for i in rng.integers(0, n - 400, 60):
+    L = int(rng.integers(80, 300))
+    pops[i:i + L] += rng.uniform(-1, 1, L) * np.exp(-np.arange(L) / 60)
+rumble = sweep(55, 55, 1.0, "sine") * 0.4 * (0.6 + 0.4 * np.sin(2 * np.pi * 2 * t))
+fo = roar * 1.4 + hiss + pops * 0.6 + rumble
+fo[:150] *= np.linspace(0, 1, 150)
+save("flame_orb.wav", fo, 0.75)
+
+# --- 기가 미사일 발사 (슈웅 + 쿵) ---
+dur = 0.45
+w = noise(dur) - lowpass(noise(dur), 6)                                          # 고음 위주의 바람 소리
+w *= np.concatenate([np.linspace(0, 1, int(SR * 0.05)), np.exp(-np.arange(int(SR * dur) - int(SR * 0.05)) / (SR * 0.12))])
+thump = sweep(140, 45, dur, "sine") * env(int(SR * dur), a=0.002, r=0.08)
+zap = sweep(1600, 400, dur, "saw") * env(int(SR * dur), a=0.002, r=0.05) * 0.3
+save("missile_launch.wav", mix(w * 0.8, thump, zap), 0.7)
+
 print("sounds ok:", sorted(os.listdir(OUT)))

@@ -24,7 +24,9 @@ public:
     Rectangle GigaLaserRect() const;        // 차지 레이저 (세로 360px)
     bool      FlameOrbsOn() const { return flameOrbTimer > 0; }
     void      FlameOrbCenters(Vector2 out[4]) const;
-    static constexpr float FLAME_ORB_RADIUS = 58.0f;
+    float     OrbSpread() const;          // 방출 직후 퍼져 나가는 정도 (0~1)
+    static constexpr float FLAME_ORB_TIME = 4.0f;
+    static constexpr float FLAME_ORB_RADIUS = 85.0f;   // 화염구 하나의 반지름 (강화 전 58)
 
     // 레이저가 보스에 막히는 지점 (Game이 매 프레임 계산해서 넣어줌)
     float laserEndX = SCREEN_W;
@@ -70,5 +72,6 @@ private:
     float gigaLaserTimer = 0;   // LASER 차지 지속 시간 (5초)
     float flameOrbTimer = 0;    // FLAME 차지 지속 시간 (4초)
     float orbAngle = 0;
+    float orbFxTimer = 0;       // 화염구 이펙트 방출 간격 (1/60초 고정)
     float time = 0;             // 연출용 누적 시간
 };
