@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{be3b124e-e862-4d4f-9a3c-1df31b494000}</ProjectGuid>
+    <RootNamespace>NeonStriker</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup>
+    <OutDir>$(SolutionDir)bin\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)obj\$(Configuration)\</IntDir>
+    <TargetName>NeonStriker</TargetName>
+  </PropertyGroup>
+
+  <!-- 공통 설정: raylib를 소스째로 함께 컴파일하므로 별도 설치가 필요 없음 -->
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>false</SDLCheck>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard_C>stdc11</LanguageStandard_C>
+      <!-- 한글 주석이 UTF-8로 저장되어 있으므로 /utf-8 필수 -->
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(ProjectDir)raylib\src;$(ProjectDir)raylib\src\external\glfw\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>PLATFORM_DESKTOP;GRAPHICS_API_OPENGL_33;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <!-- 콘솔 창 없이 실행 (Windows 서브시스템) + main()을 진입점으로 사용 -->
+      <SubSystem>Windows</SubSystem>
+      <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
+      <AdditionalDependencies>opengl32.lib;gdi32.lib;winmm.lib;user32.lib;shell32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <!-- 빌드 후 assets 폴더를 실행 파일 옆으로 복사 (게임은 실행 파일 폴더 기준으로 리소스를 찾음) -->
+    <PostBuildEvent>
+      <Command>xcopy /E /I /Y /Q "$(ProjectDir)assets" "$(OutDir)assets"</Command>
+      <Message>Copy assets</Message>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+
+  <!-- 게임 소스 -->
+  <ItemGroup>
+    <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\Game.cpp" />
+    <ClCompile Include="src\Assets.cpp" />
+    <ClCompile Include="src\Background.cpp" />
+    <ClCompile Include="src\Effects.cpp" />
+    <ClCompile Include="src\Bullet.cpp" />
+    <ClCompile Include="src\Player.cpp" />
+    <ClCompile Include="src\Monster.cpp" />
+    <ClCompile Include="src\Item.cpp" />
+    <ClCompile Include="src\Boss.cpp" />
+    <ClCompile Include="src\UI.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\Config.h" />
+    <ClInclude Include="src\Game.h" />
+    <ClInclude Include="src\Assets.h" />
+    <ClInclude Include="src\Background.h" />
+    <ClInclude Include="src\Effects.h" />
+    <ClInclude Include="src\Bullet.h" />
+    <ClInclude Include="src\Player.h" />
+    <ClInclude Include="src\Monster.h" />
+    <ClInclude Include="src\Item.h" />
+    <ClInclude Include="src\Boss.h" />
+    <ClInclude Include="src\UI.h" />
+  </ItemGroup>
+
+  <!-- raylib 5.5 소스 (C) : 경고가 많으므로 경고 수준을 낮춤 -->
+  <ItemGroup>
+    <ClCompile Include="raylib\src\rcore.c"><WarningLevel>TurnOffAllWarnings</WarningLevel></ClCompile>
+    <ClCompile Include="raylib\src\rshapes.c"><WarningLevel>TurnOffAllWarnings</WarningLevel></ClCompile>
+    <ClCompile Include="raylib\src\rtextures.c"><WarningLevel>TurnOffAllWarnings</WarningLevel></ClCompile>
+    <ClCompile Include="raylib\src\rtext.c"><WarningLevel>TurnOffAllWarnings</WarningLevel></ClCompile>
+    <ClCompile Include="raylib\src\rmodels.c"><WarningLevel>TurnOffAllWarnings</WarningLevel></ClCompile>
+    <ClCompile Include="raylib\src\raudio.c"><WarningLevel>TurnOffAllWarnings</WarningLevel></ClCompile>
+    <ClCompile Include="raylib\src\utils.c"><WarningLevel>TurnOffAllWarnings</WarningLevel></ClCompile>
+    <ClCompile Include="raylib\src\rglfw.c"><WarningLevel>TurnOffAllWarnings</WarningLevel></ClCompile>
+  </ItemGroup>
+
+  <!-- 실행 파일 아이콘 -->
+  <ItemGroup>
+    <ResourceCompile Include="resources\app.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="resources\icon.ico" />
+  </ItemGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>
